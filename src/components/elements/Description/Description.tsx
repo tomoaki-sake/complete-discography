@@ -1,24 +1,17 @@
-import clsx from "clsx";
-import React, { ComponentProps, ReactNode } from "react";
+import { Text, TextProps } from "@chakra-ui/react";
+import React, { ReactNode } from "react";
 
-type DescriptionProps = ComponentProps<"p"> & {
+type DescriptionProps = TextProps & {
   children: ReactNode;
 };
 
 export const Description: React.FC<DescriptionProps> = ({
   children,
-  className = "",
   ...rest
 }) => {
   return (
-    <p
-      className={clsx(
-        "text-base font-medium text-gray-500 dark:text-gray-400",
-        className
-      )}
-      {...rest}
-    >
+    <Text color="gray.500" fontSize="sm" {...rest}>
       {children}
-    </p>
+    </Text>
   );
 };
