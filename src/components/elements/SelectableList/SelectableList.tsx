@@ -1,4 +1,10 @@
-import clsx from "clsx";
+import {
+  Box,
+  Divider,
+  List,
+  ListItem,
+  useColorModeValue,
+} from "@chakra-ui/react";
 import React, { ComponentProps } from "react";
 
 export type ListItem = {
@@ -16,30 +22,28 @@ export const SelectableList: React.FC<SelectableListProps> = ({
   items,
   selectedItem,
   handleItemClick,
-  className = "",
 }) => {
+  const hoverBg = useColorModeValue("gray.100", "gray.700");
+  const selectedBg = useColorModeValue("blue.100", "blue.700");
   return (
-    <div
-      className={clsx(
-        "max-w-md mx-auto max-h-96 overflow-auto bg-white rounded-md shadow-md",
-        className
-      )}
-    >
-      <ul className="divide-y divide-gray-200">
+    <Box mx="auto" overflow="auto" bg="white" rounded="5px">
+      <List spacing={3}>
         {items.map((item, index) => (
-          <li
-            key={index}
-            className={`p-4 cursor-pointer ${
-              selectedItem?.id === item.id
-                ? "bg-blue-100 hover:none"
-                : "hover:bg-gray-100"
-            }`}
-            onClick={() => handleItemClick(item)}
-          >
-            {item.content}
-          </li>
+          <Box key={index}>
+            <ListItem
+              px={4}
+              py={2}
+              cursor="pointer"
+              bg={selectedItem?.id === item.id ? selectedBg : "transparent"}
+              _hover={{ bg: hoverBg }}
+              onClick={() => handleItemClick(item)}
+            >
+              {item.content}
+            </ListItem>
+            {index < items.length - 1 && <Divider />}
+          </Box>
         ))}
-      </ul>
-    </div>
+      </List>
+    </Box>
   );
 };
