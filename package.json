@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "biome lint ./src",
-    "format": "biome format ./src --write"
+    "format": "biome format ./src --write",
+    "fix-lint": "biome check --write ./src"
   },
   "dependencies": {
+    "@spotify/web-api-ts-sdk": "^1.2.0",
     "next": "15.0.3",
     "react": "19.0.0-rc-66855b96-20241106",
     "react-dom": "19.0.0-rc-66855b96-20241106"
