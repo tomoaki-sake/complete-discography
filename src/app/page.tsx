@@ -1,101 +1,117 @@
-import Image from "next/image"
+"use client"
+import { ListItemWithIcon } from "@/components/ui/list-item-with-icon"
+import { SearchBar } from "@/components/ui/search-bar/search-bar"
+import { searchArtists } from "@/lib/spotify-client"
+import {
+  Artist,
+  ArtistSearchResult,
+  Page,
+  SearchResults,
+  SimplifiedTrack,
+} from "@spotify/web-api-ts-sdk"
+import { Loader2 } from "lucide-react"
+import { useState } from "react"
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [artist, setArtist] = useState("")
+  const [artists, setArtists] = useState<Page<Artist> | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [playlistData, setPlaylistData] = useState<SimplifiedTrack[] | null>(
+    null,
+  )
+  const [error, setError] = useState<string | null>(null)
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const artistData = await searchArtists(artist)
+
+      if (!artistData) {
+        throw new Error("アーティストが見つかりませんでした")
+      }
+      setArtists(artistData)
+
+      // const tracks = await spotifyService.getAllArtistTracks(artistData.id);
+
+      // if (tracks.length === 0) {
+      //   throw new Error('トラックが見つかりませんでした');
+      // }
+
+      // const uniqueAlbums = new Set(tracks.map(track => track.album.name));
+
+      // const formattedTracks = tracks.map(track => ({
+      //   id: track.id,
+      //   name: track.name,
+      //   duration: spotifyService.formatDuration(track.duration_ms),
+      //   durationMs: track.duration_ms,
+      //   albumName: track.album.name,
+      //   albumImage: track.album.images[0]?.url || 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&q=80&w=1000'
+      // }));
+
+      // const totalMs = formattedTracks.reduce((acc, track) => acc + track.durationMs, 0);
+
+      // setPlaylistData({
+      //   artist: artistData.name,
+      //   image: artistData.images[0]?.url || 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&q=80&w=1000',
+      //   tracks: formattedTracks,
+      //   totalDuration: spotifyService.formatDuration(totalMs),
+      //   albumCount: uniqueAlbums.size
+      // });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "エラーが発生しました")
+      // setPlaylistData(null);
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold mb-2 text-gray-800">
+            アーティスト全曲プレイリスト
+          </h1>
+          <p className="text-gray-600 mb-8">
+            アーティスト名を入力して、全曲プレイリストを作成
+          </p>
+          <SearchBar
+            artist={artist}
+            setArtist={setArtist}
+            handleSearch={handleSearch}
+            isLoading={isLoading}
+          />
+
+          {error && (
+            <div className="mt-4 text-red-600 bg-red-50 p-3 rounded-lg">
+              {error}
+            </div>
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {isLoading ? (
+          <div className="flex justify-center items-center mt-16">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+          </div>
+        ) : (
+          artists && (
+            <div className="space-y-8 max-w-xl mx-auto">
+              {artists.items.map((artist) => (
+                <ListItemWithIcon
+                  key={artist.id}
+                  imageSrc={artist.images[0]?.url}
+                  imageAlt={artist.name}
+                  title={artist.name}
+                  content={`${artist.followers.total.toLocaleString()} フォロワー`}
+                />
+              ))}
+            </div>
+          )
+        )}
+      </div>
     </div>
   )
 }

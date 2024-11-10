@@ -1,4 +1,6 @@
 import {
+  Artist,
+  Page,
   type SearchResults,
   type SimplifiedAlbum,
   type SimplifiedTrack,
@@ -23,9 +25,10 @@ const market = "JP"
 
 export const searchArtists = async (
   query: string,
-): Promise<SearchResults<["artist"]> | null> => {
+): Promise<Page<Artist> | null> => {
   try {
-    return await spotifyService.search(query, ["artist"])
+    const result = await spotifyService.search(query, ["artist"])
+    return result.artists
   } catch (error) {
     console.error("Error searching artist:", error)
     return null
@@ -61,9 +64,7 @@ const getArtistAlbums = async (
   }
 }
 
-const getAlbumTracks = async (
-  albumId: string,
-): Promise<SimplifiedTrack[]> => {
+const getAlbumTracks = async (albumId: string): Promise<SimplifiedTrack[]> => {
   try {
     const data = await spotifyService.albums.tracks(albumId, market)
     return data.items
