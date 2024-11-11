@@ -1,7 +1,6 @@
 import {
-  Artist,
-  Page,
-  type SearchResults,
+  type Artist,
+  type Page,
   type SimplifiedAlbum,
   type SimplifiedTrack,
   SpotifyApi,
@@ -83,19 +82,37 @@ export const getAllArtistTracks = async (
 
   for (const album of albums) {
     const tracks = await getAlbumTracks(album.id)
-    tracks.forEach((track) => {
+    for (const track of tracks) {
       if (!trackNames.has(track.name)) {
         trackNames.add(track.name)
         allTracks.push(track)
       }
-    })
+    }
   }
 
   return allTracks
 }
 
-export const formatDuration = (ms: number): string => {
-  const minutes = Math.floor(ms / 60000)
-  const seconds = Math.floor((ms % 60000) / 1000)
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`
+export const createAllTracksPlayList = async (
+  userId: string,
+  name: string,
+  trackUris: string[],
+): Promise<string | null> => {
+  try {
+    const playlistOptions = { name }
+    const playlist = await spotifyService.playlists.createPlaylist(
+      userId,
+      playlistOptions,
+    )
+
+    if (!playlist) {
+      throw new Error("Failed to create playlist")
+    }
+
+    await spotifyService.playlists.addItemsToPlaylist(playlist.id, trackUris)
+    return playlist.id
+  } catch (error) {
+    console.error("Error creating playlist:", error)
+    return null
+  }
 }
