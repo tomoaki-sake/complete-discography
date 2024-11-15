@@ -1,7 +1,9 @@
 "use client"
 import { Accordion } from "@/components/ui/accordion"
 import { ListItemWithIcon } from "@/components/ui/list-item-with-icon"
+import { PlaylistCard } from "@/components/ui/playlist-card"
 import { SearchBar } from "@/components/ui/search-bar/search-bar"
+import TrackList from "@/components/ui/track-list/track-list"
 import { getAllArtistTracks, searchArtists } from "@/lib/spotify-client"
 import type { PlaylistData } from "@/types/music"
 import { formatDuration } from "@/utils/format"
@@ -17,6 +19,7 @@ export default function Home() {
   const [playlistData, setPlaylistData] = useState<PlaylistData | null>(null)
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null)
   const [isListVisible, setIsListVisible] = useState(true)
+  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const toggleListVisibility = () => {
@@ -135,7 +138,42 @@ export default function Home() {
             )
           )}
         </div>
-        <pre>{JSON.stringify(playlistData, null, 2)}</pre>
+
+        <div className="mt-6 max-w-xl mx-auto">
+          {isLoadingPlaylist ? (
+            <div className="flex justify-center items-center mt-16">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+              <p className="ml-2 text-indigo-600">楽曲情報取得中...</p>
+            </div>
+          ) : playlistData ? (
+            <div className="space-y-8">
+              <PlaylistCard
+                artist={playlistData.artist}
+                songCount={playlistData.tracks.length}
+                duration={playlistData.totalDuration}
+                image={playlistData.image}
+              />
+
+              {selectedTrackId && (
+                <div className="fixed bottom-4 right-4 bg-white shadow-lg rounded-lg p-4 z-50">
+                  <iframe
+                    title="Selected Artist Songs"
+                    src={`https://open.spotify.com/embed/track/${selectedTrackId}`}
+                    width="300"
+                    height="80"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy"
+                  />
+                </div>
+              )}
+
+              <TrackList
+                tracks={playlistData.tracks}
+                handleSelectTrack={setSelectedTrackId}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )
