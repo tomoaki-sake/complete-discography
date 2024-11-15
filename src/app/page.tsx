@@ -1,17 +1,25 @@
 "use client"
 import { Accordion } from "@/components/ui/accordion"
 import { ListItemWithIcon } from "@/components/ui/list-item-with-icon"
+import { LoginButton } from "@/components/ui/login-button"
 import { PlaylistCard } from "@/components/ui/playlist-card"
 import { SearchBar } from "@/components/ui/search-bar/search-bar"
 import TrackList from "@/components/ui/track-list/track-list"
-import { getAllArtistTracks, searchArtists } from "@/lib/spotify-client"
+import { UserMenu } from "@/components/ui/user-menu/user-menu"
+import {
+  getAllArtistTracks,
+  getMe,
+  logout,
+  searchArtists,
+} from "@/lib/spotify-client"
 import type { PlaylistData } from "@/types/music"
 import { formatDuration } from "@/utils/format"
-import type { Artist, Page } from "@spotify/web-api-ts-sdk"
+import type { Artist, Page, UserProfile } from "@spotify/web-api-ts-sdk"
 import { Loader2 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 export default function Home() {
+  const [user, setUser] = useState<UserProfile | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [artists, setArtists] = useState<Page<Artist> | null>(null)
   const [isSearching, setIsSearching] = useState(false)
@@ -21,6 +29,32 @@ export default function Home() {
   const [isListVisible, setIsListVisible] = useState(true)
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const setLoggedInUser = async () => {
+      const user = await getMe()
+      if (user) setUser(user)
+    }
+
+    setLoggedInUser()
+  }, [])
+
+  const handleLogin = async () => {
+    const user = await getMe()
+    if (!user) return
+
+    setUser(user)
+  }
+
+  const handleLogout = () => {
+    setSearchQuery("")
+    setArtists(null)
+    setPlaylistData(null)
+    setSelectedArtist(null)
+    setSelectedTrackId(null)
+    setUser(null)
+    logout()
+  }
 
   const toggleListVisibility = () => {
     setIsListVisible(!isListVisible)
@@ -82,11 +116,21 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-2 text-gray-800">
+      <header className="bg-white shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+          <h1 className="text-xl font-bold text-gray-800">
             アーティスト全曲プレイリスト
           </h1>
+          {user ? (
+            <UserMenu user={user} onLogout={handleLogout} />
+          ) : (
+            <LoginButton onLogin={handleLogin} />
+          )}
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-4 py-12">
+        <div className="text-center mb-12">
           <p className="text-gray-600 mb-8">
             アーティスト名を入力して、全曲プレイリストを作成
           </p>
@@ -174,7 +218,7 @@ export default function Home() {
             </div>
           ) : null}
         </div>
-      </div>
+      </main>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import {
   type SimplifiedAlbum,
   type SimplifiedTrack,
   SpotifyApi,
+  type UserProfile,
 } from "@spotify/web-api-ts-sdk"
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID || ""
@@ -21,6 +22,20 @@ const spotifyService = SpotifyApi.withUserAuthorization(
   scopes,
 )
 const market = "JP"
+
+export const getMe = async (): Promise<UserProfile | null> => {
+  try {
+    const user = await spotifyService.currentUser.profile()
+    return user
+  } catch (error) {
+    console.error("Error getting user profile:", error)
+    return null
+  }
+}
+
+export const logout = (): void => {
+  spotifyService.logOut()
+}
 
 export const searchArtists = async (
   query: string,
