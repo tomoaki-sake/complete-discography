@@ -1,9 +1,11 @@
 import {
   type Artist,
   type Page,
+  type Playlist,
   type SimplifiedAlbum,
   type SimplifiedTrack,
   SpotifyApi,
+  type TrackItem,
   type UserProfile,
 } from "@spotify/web-api-ts-sdk"
 
@@ -60,7 +62,7 @@ const getArtistAlbums = async (
     while (true) {
       const data = await spotifyService.artists.albums(
         artistId,
-        undefined,
+        "album,single,compilation,appears_on",
         market,
         limit,
         offset,
@@ -96,6 +98,7 @@ export const getAllArtistTracks = async (
   const trackNames = new Set<string>()
 
   for (const album of albums) {
+    console.log("album", album)
     const tracks = await getAlbumTracks(album.id)
     for (const track of tracks) {
       if (!trackNames.has(track.name)) {
@@ -112,7 +115,7 @@ export const createAllTracksPlayList = async (
   userId: string,
   name: string,
   trackUris: string[],
-): Promise<string | null> => {
+): Promise<Playlist<TrackItem> | null> => {
   try {
     const playlistOptions = { name }
     const playlist = await spotifyService.playlists.createPlaylist(
@@ -124,8 +127,13 @@ export const createAllTracksPlayList = async (
       throw new Error("Failed to create playlist")
     }
 
-    await spotifyService.playlists.addItemsToPlaylist(playlist.id, trackUris)
-    return playlist.id
+    const BATCH_SIZE = 100
+    for (let i = 0; i < trackUris.length; i += BATCH_SIZE) {
+      const uris = trackUris.slice(i, i + BATCH_SIZE)
+      await spotifyService.playlists.addItemsToPlaylist(playlist.id, uris)
+    }
+
+    return playlist
   } catch (error) {
     console.error("Error creating playlist:", error)
     return null

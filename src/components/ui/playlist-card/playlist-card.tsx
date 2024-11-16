@@ -1,10 +1,13 @@
-import { Music } from "lucide-react"
+import { Loader2, Music } from "lucide-react"
 
 interface PlaylistCardProps {
   artist: string
   songCount: number
   duration: string
   image: string
+  handleCreatePlaylist: () => void
+  isCreating: boolean
+  spotifyLink: string | undefined
 }
 
 const PlaylistCard: React.FC<PlaylistCardProps> = ({
@@ -12,6 +15,9 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
   songCount,
   duration,
   image,
+  handleCreatePlaylist,
+  isCreating,
+  spotifyLink,
 }) => {
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -40,14 +46,39 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
             </div>
           </div>
           <div className="mt-6">
-            <button
-              type="button"
-              className="bg-indigo-600 text-white px-6 py-3 rounded-full
+            {spotifyLink ? (
+              <a
+                href={spotifyLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-green-600 text-white px-6 py-3 rounded-full
+                           hover:bg-green-700 transition-colors duration-200
+                           focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2
+                           flex items-center justify-center space-x-2"
+              >
+                <span>Spotifyで開く</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                className={`bg-indigo-600 text-white px-6 py-3 rounded-full
                             hover:bg-indigo-700 transition-colors duration-200
-                            focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-            >
-              プレイリストを作成する
-            </button>
+                            focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
+                            flex items-center justify-center space-x-2
+                            ${isCreating ? "opacity-50 cursor-not-allowed" : ""}`}
+                onClick={handleCreatePlaylist}
+                disabled={isCreating}
+              >
+                {isCreating ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>作成中...</span>
+                  </>
+                ) : (
+                  "プレイリストを作成"
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
