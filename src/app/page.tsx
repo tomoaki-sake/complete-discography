@@ -33,7 +33,7 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
   const [playlistData, setPlaylistData] = useState<PlaylistData | null>(null)
-  const [selectedArtist, setSelectedArtist] = useState<string | null>(null)
+  const [selectedArtist, setSelectedArtist] = useState<Artist | null>(null)
   const [isListVisible, setIsListVisible] = useState(true)
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null)
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false)
@@ -107,7 +107,7 @@ export default function Home() {
   const handleSelectArtist = async (artist: Artist) => {
     setIsCreatedPlayList(null)
     setIsLoadingPlaylist(true)
-    setSelectedArtist(artist.name)
+    setSelectedArtist(artist)
     setIsListVisible(false)
     setError(null)
 
@@ -242,7 +242,7 @@ export default function Home() {
           <Accordion
             title={
               selectedArtist
-                ? `選ばれたアーティスト: ${selectedArtist}`
+                ? `選ばれたアーティスト: ${selectedArtist.name}`
                 : "アーティストを選択してください"
             }
             existContent={!!artists && artists.items.length > 0}

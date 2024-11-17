@@ -54,23 +54,29 @@ export const searchArtists = async (
 const getArtistAlbums = async (
   artistId: string,
 ): Promise<SimplifiedAlbum[]> => {
+  const albums: SimplifiedAlbum[] = []
+  // include_groups: album, single, compilation, appears_onとカンマ区切りで指定するとうまく機能しないので、個別で取得する
+  // ただし、appears_onはアーティストの直接の楽曲でないものも含まれるので、ひとまず取得しない仕様とする
+  // https://developer.spotify.com/documentation/web-api/reference/get-an-artists-albums
+  const ALBUM_TYPES = ["album", "single", "compilation"]
   try {
-    const albums: SimplifiedAlbum[] = []
-    let offset = 0
-    const limit = 50
+    for (const albumType of ALBUM_TYPES) {
+      let offset = 0
+      const limit = 50
 
-    while (true) {
-      const data = await spotifyService.artists.albums(
-        artistId,
-        "album,single,compilation,appears_on",
-        market,
-        limit,
-        offset,
-      )
-      albums.push(...data.items)
+      while (true) {
+        const data = await spotifyService.artists.albums(
+          artistId,
+          albumType,
+          market,
+          limit,
+          offset,
+        )
+        albums.push(...data.items)
 
-      if (data.items.length < limit) break
-      offset += limit
+        if (data.items.length < limit) break
+        offset += limit
+      }
     }
 
     return albums
@@ -98,7 +104,6 @@ export const getAllArtistTracks = async (
   const trackNames = new Set<string>()
 
   for (const album of albums) {
-    console.log("album", album)
     const tracks = await getAlbumTracks(album.id)
     for (const track of tracks) {
       if (!trackNames.has(track.name)) {
