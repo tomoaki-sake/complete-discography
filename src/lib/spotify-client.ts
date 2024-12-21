@@ -1,33 +1,39 @@
-import {
-  type Artist,
-  type Page,
-  type Playlist,
-  type SimplifiedAlbum,
-  type SimplifiedTrack,
-  SpotifyApi,
-  type TrackItem,
-  type UserProfile,
-} from "@spotify/web-api-ts-sdk"
+import type {
+  SpotifyAlbum,
+  SpotifyArtist,
+  SpotifyArtistsSearchResponse,
+  SpotifyPage,
+  SpotifyPlaylist,
+  SpotifyTrack,
+  SpotifyUserProfile,
+} from "@/types/spotify"
+import { getOrCreateAccessToken } from "./spotify-auth"
 
-const CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID || ""
-const SERVICE_DOMAIN = process.env.NEXT_PUBLIC_SERVICE_DOMAIN || ""
-const scopes = [
-  "user-read-private",
-  "user-read-email",
-  "playlist-modify-public",
-  "playlist-modify-private",
-]
-
-const spotifyService = SpotifyApi.withUserAuthorization(
-  CLIENT_ID,
-  SERVICE_DOMAIN,
-  scopes,
-)
+const spotifyDomain = new URL("https://api.spotify.com/")
 const market = "JP"
 
-export const getMe = async (): Promise<UserProfile | null> => {
+const spotifyClient = async <T>(
+  endpoint: string,
+  method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
+  body?: any,
+): Promise<T> => {
+  const token = await getOrCreateAccessToken()
+
+  const res = await fetch(spotifyDomain + endpoint, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+
+  return res.json()
+}
+
+export const getMe = async (): Promise<SpotifyUserProfile | null> => {
   try {
-    const user = await spotifyService.currentUser.profile()
+    const user = await spotifyClient<SpotifyUserProfile>("v1/me")
     return user
   } catch (error) {
     console.error("Error getting user profile:", error)
@@ -35,15 +41,13 @@ export const getMe = async (): Promise<UserProfile | null> => {
   }
 }
 
-export const logout = (): void => {
-  spotifyService.logOut()
-}
-
 export const searchArtists = async (
   query: string,
-): Promise<Page<Artist> | null> => {
+): Promise<SpotifyPage<SpotifyArtist> | null> => {
   try {
-    const result = await spotifyService.search(query, ["artist"])
+    const result = await spotifyClient<SpotifyArtistsSearchResponse>(
+      `v1/search?q=${query}&type=artist`,
+    )
     return result.artists
   } catch (error) {
     console.error("Error searching artist:", error)
@@ -51,10 +55,8 @@ export const searchArtists = async (
   }
 }
 
-const getArtistAlbums = async (
-  artistId: string,
-): Promise<SimplifiedAlbum[]> => {
-  const albums: SimplifiedAlbum[] = []
+const getArtistAlbums = async (artistId: string): Promise<SpotifyAlbum[]> => {
+  const albums: SpotifyAlbum[] = []
   // include_groups: album, single, compilation, appears_onとカンマ区切りで指定するとうまく機能しないので、個別で取得する
   // ただし、appears_onはアーティストの直接の楽曲でないものも含まれるので、ひとまず取得しない仕様とする
   // https://developer.spotify.com/documentation/web-api/reference/get-an-artists-albums
@@ -65,12 +67,8 @@ const getArtistAlbums = async (
       const limit = 50
 
       while (true) {
-        const data = await spotifyService.artists.albums(
-          artistId,
-          albumType,
-          market,
-          limit,
-          offset,
+        const data = await spotifyClient<SpotifyPage<SpotifyAlbum>>(
+          `v1/artists/${artistId}/albums?include_groups=${albumType}&market=${market}&limit=${limit}&offset=${offset}`,
         )
         albums.push(...data.items)
 
@@ -86,9 +84,11 @@ const getArtistAlbums = async (
   }
 }
 
-const getAlbumTracks = async (albumId: string): Promise<SimplifiedTrack[]> => {
+const getAlbumTracks = async (albumId: string): Promise<SpotifyTrack[]> => {
   try {
-    const data = await spotifyService.albums.tracks(albumId, market)
+    const data = await spotifyClient<SpotifyPage<SpotifyTrack>>(
+      `v1/albums/${albumId}/tracks?market=${market}`,
+    )
     return data.items
   } catch (error) {
     console.error("Error getting album tracks:", error)
@@ -98,9 +98,9 @@ const getAlbumTracks = async (albumId: string): Promise<SimplifiedTrack[]> => {
 
 export const getAllArtistTracks = async (
   artistId: string,
-): Promise<SimplifiedTrack[]> => {
+): Promise<SpotifyTrack[]> => {
   const albums = await getArtistAlbums(artistId)
-  const allTracks: SimplifiedTrack[] = []
+  const allTracks: SpotifyTrack[] = []
   const trackNames = new Set<string>()
 
   for (const album of albums) {
@@ -120,11 +120,12 @@ export const createAllTracksPlayList = async (
   userId: string,
   name: string,
   trackUris: string[],
-): Promise<Playlist<TrackItem> | null> => {
+): Promise<SpotifyPlaylist | null> => {
   try {
     const playlistOptions = { name }
-    const playlist = await spotifyService.playlists.createPlaylist(
-      userId,
+    const playlist = await spotifyClient<SpotifyPlaylist>(
+      `v1/users/${userId}/playlists`,
+      "POST",
       playlistOptions,
     )
 
@@ -135,7 +136,9 @@ export const createAllTracksPlayList = async (
     const BATCH_SIZE = 100
     for (let i = 0; i < trackUris.length; i += BATCH_SIZE) {
       const uris = trackUris.slice(i, i + BATCH_SIZE)
-      await spotifyService.playlists.addItemsToPlaylist(playlist.id, uris)
+      await spotifyClient(`v1/playlists/${playlist.id}/tracks`, "POST", {
+        uris,
+      })
     }
 
     return playlist

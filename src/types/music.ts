@@ -1,8 +1,8 @@
-import type { SimplifiedTrack } from "@spotify/web-api-ts-sdk"
+import type { SpotifyTrack } from "./spotify"
 
 export interface PlaylistData {
   artist: string
   image: string
-  tracks: SimplifiedTrack[]
+  tracks: SpotifyTrack[]
   totalDuration: string
 }

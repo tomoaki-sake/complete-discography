@@ -6,39 +6,42 @@ import { PlaylistCard } from "@/components/ui/playlist-card"
 import { SearchBar } from "@/components/ui/search-bar/search-bar"
 import TrackList from "@/components/ui/track-list/track-list"
 import { UserMenu } from "@/components/ui/user-menu/user-menu"
+import { logout } from "@/lib/spotify-auth"
 import {
   createAllTracksPlayList,
   getAllArtistTracks,
   getMe,
-  logout,
   searchArtists,
 } from "@/lib/spotify-client"
 import type { PlaylistData } from "@/types/music"
-import { formatDuration } from "@/utils/format"
 import type {
-  Artist,
-  Page,
-  Playlist,
-  TrackItem,
-  UserProfile,
-} from "@spotify/web-api-ts-sdk"
+  SpotifyArtist,
+  SpotifyPage,
+  SpotifyPlaylist,
+  SpotifyUserProfile,
+} from "@/types/spotify"
+import { formatDuration } from "@/utils/format"
 import { Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import toast, { Toaster } from "react-hot-toast"
 
 export default function Home() {
-  const [user, setUser] = useState<UserProfile | null>(null)
+  const [user, setUser] = useState<SpotifyUserProfile | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [artists, setArtists] = useState<Page<Artist> | null>(null)
+  const [artists, setArtists] = useState<SpotifyPage<SpotifyArtist> | null>(
+    null,
+  )
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
   const [playlistData, setPlaylistData] = useState<PlaylistData | null>(null)
-  const [selectedArtist, setSelectedArtist] = useState<Artist | null>(null)
+  const [selectedArtist, setSelectedArtist] = useState<SpotifyArtist | null>(
+    null,
+  )
   const [isListVisible, setIsListVisible] = useState(true)
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null)
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false)
   const [createdPlayList, setIsCreatedPlayList] =
-    useState<Playlist<TrackItem> | null>(null)
+    useState<SpotifyPlaylist | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -104,7 +107,7 @@ export default function Home() {
     }
   }
 
-  const handleSelectArtist = async (artist: Artist) => {
+  const handleSelectArtist = async (artist: SpotifyArtist) => {
     setIsCreatedPlayList(null)
     setIsLoadingPlaylist(true)
     setSelectedArtist(artist)

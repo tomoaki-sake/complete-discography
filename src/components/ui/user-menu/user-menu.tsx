@@ -1,8 +1,8 @@
-import type { UserProfile } from "@spotify/web-api-ts-sdk"
+import type { SpotifyUserProfile } from "@/types/spotify"
 import { LogOut, User } from "lucide-react"
 
 interface UserMenuProps {
-  user: UserProfile
+  user: SpotifyUserProfile
   onLogout: () => void
 }
 

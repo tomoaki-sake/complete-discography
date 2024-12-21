@@ -1,8 +1,8 @@
+import type { SpotifyTrack } from "@/types/spotify"
 import { formatDuration } from "@/utils/format"
-import type { SimplifiedTrack } from "@spotify/web-api-ts-sdk"
 
 interface TrackListProps {
-  tracks: SimplifiedTrack[]
+  tracks: SpotifyTrack[]
   handleSelectTrack: (trackId: string) => void
 }
 
