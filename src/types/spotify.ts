@@ -31,11 +31,6 @@ interface SpotifyImage {
   width: number
 }
 
-interface SpotifyExplicitContent {
-  filter_enabled: boolean
-  filter_locked: boolean
-}
-
 interface SpotifyUserReference {
   display_name: string
   external_urls: SpotifyExternalUrls
@@ -46,11 +41,10 @@ interface SpotifyUserReference {
   uri: string
 }
 
+// 2026-02 の仕様変更で email / followers / country / explicit_content / product は返らなくなった
 interface SpotifyUser {
   display_name: string
-  email: string
   external_urls: SpotifyExternalUrls
-  followers: SpotifyFollowers
   href: string
   id: string
   images: SpotifyImage[]
@@ -58,11 +52,7 @@ interface SpotifyUser {
   uri: string
 }
 
-interface SpotifyUserProfile extends SpotifyUser {
-  country: string
-  explicit_content: SpotifyExplicitContent
-  product: string
-}
+type SpotifyUserProfile = SpotifyUser
 
 interface SpotifySimplifiedArtist {
   external_urls: SpotifyExternalUrls
@@ -73,11 +63,10 @@ interface SpotifySimplifiedArtist {
   uri: string
 }
 
+// 2026-02 の仕様変更で followers / popularity は返らなくなった
 interface SpotifyArtist extends SpotifySimplifiedArtist {
-  followers: SpotifyFollowers
-  genres: string[]
+  genres?: string[]
   images: SpotifyImage[]
-  popularity: number
 }
 
 interface SpotifyArtistsSearchResponse {
@@ -98,7 +87,6 @@ interface SpotifyAlbum {
   type: string
   uri: string
   artists: SpotifyArtist[]
-  album_group: string
 }
 
 interface SpotifyTrack {
@@ -132,16 +120,15 @@ interface SpotifyPlaylist {
   snapshot_id: string
   type: string
   uri: string
-  tracks: SpotifyTrack[]
 }
 
 export type {
-  SpotifyTokens,
-  SpotifyPage,
-  SpotifyUserProfile,
+  SpotifyAlbum,
   SpotifyArtist,
   SpotifyArtistsSearchResponse,
-  SpotifyAlbum,
-  SpotifyTrack,
+  SpotifyPage,
   SpotifyPlaylist,
+  SpotifyTokens,
+  SpotifyTrack,
+  SpotifyUserProfile,
 }

@@ -22,7 +22,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
           placeholder="アーティスト名を入力..."
           className="w-full px-6 py-4 text-lg rounded-full border-2 border-gray-200
                     focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200
-                    transition-colors duration-200 bg-white shadow-sm
+                    transition-colors duration-200 bg-white shadow-xs
                     placeholder-gray-400"
         />
         <button

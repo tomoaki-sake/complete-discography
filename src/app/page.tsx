@@ -1,4 +1,7 @@
 "use client"
+import { Loader2 } from "lucide-react"
+import { useEffect, useState } from "react"
+import toast, { Toaster } from "react-hot-toast"
 import { Accordion } from "@/components/ui/accordion"
 import { ListItemWithIcon } from "@/components/ui/list-item-with-icon"
 import { LoginButton } from "@/components/ui/login-button"
@@ -21,9 +24,6 @@ import type {
   SpotifyUserProfile,
 } from "@/types/spotify"
 import { formatDuration } from "@/utils/format"
-import { Loader2 } from "lucide-react"
-import { useEffect, useState } from "react"
-import toast, { Toaster } from "react-hot-toast"
 
 export default function Home() {
   const [user, setUser] = useState<SpotifyUserProfile | null>(null)
@@ -45,15 +45,19 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // StrictMode（開発時）の effect 二重実行で、破棄された側の結果を反映しないようにする
+    let ignore = false
     const setLoggedInUser = async () => {
       const user = await getMe()
-      if (user) {
-        setUser(user)
-        toast.success("Spotifyにログインしました！ ")
-      }
+      if (ignore || !user) return
+      setUser(user)
+      toast.success("Spotifyにログインしました！ ")
     }
 
     setLoggedInUser()
+    return () => {
+      ignore = true
+    }
   }, [])
 
   const handleLogin = async () => {
@@ -148,7 +152,6 @@ export default function Home() {
     try {
       const trackUris = playlistData.tracks.map((track) => track.uri)
       const playlist = await createAllTracksPlayList(
-        user.id,
         `${playlistData.artist} 全曲`,
         trackUris,
       )
@@ -158,7 +161,7 @@ export default function Home() {
       }
       setIsCreatedPlayList(playlist)
       toast.success(
-        (t) => (
+        () => (
           <div className="flex flex-col gap-2">
             <span>プレイリストを作成しました！</span>
             <a
@@ -183,7 +186,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-linear-to-b from-gray-50 to-gray-100">
       <Toaster
         position="top-center"
         toastOptions={{
@@ -209,7 +212,7 @@ export default function Home() {
         }}
       />
 
-      <header className="bg-white shadow-sm">
+      <header className="bg-white shadow-xs">
         <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-xl font-bold text-gray-800">
             アーティスト全曲プレイリスト
@@ -266,7 +269,7 @@ export default function Home() {
                     imageSrc={artist.images[0]?.url}
                     imageAlt={artist.name}
                     title={artist.name}
-                    content={`${artist.followers.total.toLocaleString()} フォロワー`}
+                    content={artist.genres?.join(", ") ?? ""}
                     isDisabled={isLoadingPlaylist}
                     onClick={() => handleSelectArtist(artist)}
                   />
