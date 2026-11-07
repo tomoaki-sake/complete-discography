@@ -8,13 +8,15 @@ import { normalizeTitle, type SpotifyApi } from "../lib/spotify-api"
 // 1. 完全一致（全角半角・大文字小文字の違いのみ無視）
 // 2. 同等: 括弧書き・「- Remastered」などの付記、記号・空白の違いを無視して一致
 //    （例: 「チャールズブロンソン」と「チャールズ・ブロンソン」）
-// 3. 近似: 前方一致（3文字以上）、または曲名の大部分を含む部分一致
+//    Acoustic・Remix などの別バージョンを選んだ場合は approximate として報告する
+// 3. 近似: 入力が Spotify の曲名の前方（3文字以上）、または大部分に一致する
 //    （例: 「ドミノ」と「ドミノのお告げ」、「チャールズブロンソン」と「チャールズ・ブロンソンのために」）
-// 4. 略称（アーティストの全曲から探すときだけ）: 2文字以上の前方一致・部分一致、
+// 4. 略称（アーティストの全曲から探すときだけ）: 入力が曲名に2文字以上含まれる、
 //    または文字の順番が合う省略形（例: 「キェルツェ螺旋」と「キェルツェの螺旋」）
 //
-// 近似・略称で選んだ曲は approximate: true にして、ユーザーに確認してもらう。
-// 「そのアーティストでその呼び方なら、それしかありえない」場合だけ採用するため、
+// 近似・略称は「入力が Spotify の曲名を縮めたもの」の向きだけを認める
+// （逆向きだと、未発表曲「夜明けの君に」にカタログの「君に」が入ってしまう）。
+// また、アーティストの全曲で「その呼び方ならそれしかありえない」と確かめられたときだけ採用し、
 // 同じ段階に曲名の違う候補が2つ以上あるとき（「ドミノのお告げ」と「ドミノ倒し」など）は決めつけない。
 
 export interface SongQuery {
@@ -27,22 +29,32 @@ export interface MatchResult {
   approximate: boolean
 }
 
-const LIVE_PATTERN = /\blive\b|ライブ|live ver/i
-// 近似（段階3）の条件: 短いほうの文字数と、長いほうに占める割合
+const LIVE_PATTERN = /\blive\b|ライブ/i
+// 元の曲とは別物として扱いたいバージョン
+const VARIANT_PATTERN =
+  /\b(acoustic|remix|reprise|instrumental|inst|karaoke|demo|unplugged|ver|version)\b|アコースティック|弾き語り|リミックス|インスト|カラオケ|デモ/i
+// 近似（段階3）の条件: 入力の文字数と、Spotify の曲名に占める割合
 // 前方一致は手がかりとして強いので、部分一致よりゆるくする
 const PREFIX_MIN_LENGTH = 3
 const PREFIX_MIN_RATIO = 0.3
 const CONTAINS_MIN_LENGTH = 4
 const CONTAINS_MIN_RATIO = 0.5
-// 略称（段階4）の条件: 前方・部分一致は2文字以上、順番が合う省略形は3文字以上
+// 略称（段階4）の条件: 部分一致は2文字以上、順番が合う省略形は3文字以上
 const ABBREV_MIN_LENGTH = 2
 const SUBSEQUENCE_MIN_LENGTH = 3
+// アーティスト名の部分一致を認める条件（「A」のような短い名前で何にでも当たらないように）
+const ARTIST_CONTAINS_MIN_LENGTH = 3
+const ARTIST_CONTAINS_MIN_RATIO = 0.5
 
-// 括弧書きや「- Remastered」などの付記を取り除いた曲名
+const length = (s: string) => Array.from(s).length
+const stripSymbols = (s: string) => s.replace(/[\s\p{P}\p{S}]/gu, "")
+
+// 括弧書きや「 - 2020 Remaster」などの付記を取り除いた曲名
+// （「 - 」の前後の空白と単語の境界を見るので、「Blue - Monologue」や「Re-Live」は削らない）
 export const cleanTitle = (s: string) =>
   normalizeTitle(s)
     .replace(
-      /\s*[-–—]\s*.*(remaster|version|ver\.|mix|edit|live|mono|stereo).*$/i,
+      /\s+[-–—]\s+.*\b(remaster(ed)?|version|ver|mix|edit|live|mono|stereo)\b.*$/i,
       "",
     )
     .replace(/[([（【［][^)\]）】］]*[)\]）】］]/g, " ")
@@ -50,18 +62,24 @@ export const cleanTitle = (s: string) =>
     .trim()
 
 // 記号・空白をすべて除いた比較用の曲名
-export const compactTitle = (s: string) =>
-  cleanTitle(s).replace(/[\s\p{P}\p{S}]/gu, "")
+export const compactTitle = (s: string) => stripSymbols(cleanTitle(s))
 
-const artistMatches = (track: SpotifyTrack, artist: string) => {
-  const want = compactTitle(artist)
-  return track.artists.some((a) => {
-    const name = compactTitle(a.name)
-    // 記号だけの名前などで比較用の文字列が空になる場合は、元の表記で比べる
-    if (!want || !name) return normalizeTitle(a.name) === normalizeTitle(artist)
-    return name === want || name.includes(want) || want.includes(name)
-  })
+export const sameArtistName = (a: string, b: string) => {
+  const x = compactTitle(a)
+  const y = compactTitle(b)
+  // 記号だけの名前などで比較用の文字列が空になる場合は、元の表記で比べる
+  if (!x || !y) return normalizeTitle(a) === normalizeTitle(b)
+  if (x === y) return true
+  const [short, long] = length(x) <= length(y) ? [x, y] : [y, x]
+  return (
+    long.includes(short) &&
+    length(short) >= ARTIST_CONTAINS_MIN_LENGTH &&
+    length(short) / length(long) >= ARTIST_CONTAINS_MIN_RATIO
+  )
 }
+
+const artistMatches = (track: SpotifyTrack, artist: string) =>
+  track.artists.some((a) => sameArtistName(a.name, artist))
 
 // フィールド指定検索の構文を壊す文字を除く
 const sanitize = (s: string) => s.replace(/["':]/g, " ").trim()
@@ -92,11 +110,21 @@ const scoreTrack = (
 ): Scored | null => {
   const key = compactTitle(track.name)
   const want = compactTitle(song.title)
-  const keyLength = Array.from(key).length
-  const wantLength = Array.from(want).length
-  const [short, long] = keyLength <= wantLength ? [key, want] : [want, key]
-  const shortLength = Math.min(keyLength, wantLength)
-  const ratio = shortLength / Math.max(keyLength, wantLength, 1)
+  const keyLength = length(key)
+  const wantLength = length(want)
+  // 近似・略称は入力のほうが短い（入力が曲名を縮めたもの）場合だけ
+  const inputIsShorter = wantLength > 0 && wantLength < keyLength
+  const ratio = inputIsShorter ? wantLength / keyLength : 0
+
+  const requestedVariant =
+    LIVE_PATTERN.test(song.title) || VARIANT_PATTERN.test(song.title)
+  // 付記を取り除いた結果、ライブ・アコースティックなど別バージョンだったもの
+  // （「2020 Remastered Version」のようなリマスター表記は同じ曲として扱う）
+  const annotation = track.name.replace(/remaster(ed)?(\s+version)?/gi, "")
+  const isVariant =
+    !requestedVariant &&
+    stripSymbols(normalizeTitle(track.name)) !== key &&
+    (LIVE_PATTERN.test(annotation) || VARIANT_PATTERN.test(annotation))
 
   let tier: number
   if (normalizeTitle(track.name) === normalizeTitle(song.title)) {
@@ -104,21 +132,20 @@ const scoreTrack = (
   } else if (key && key === want) {
     tier = TIER.equivalent
   } else if (
-    (long.startsWith(short) &&
-      shortLength >= PREFIX_MIN_LENGTH &&
+    inputIsShorter &&
+    ((key.startsWith(want) &&
+      wantLength >= PREFIX_MIN_LENGTH &&
       ratio >= PREFIX_MIN_RATIO) ||
-    (long.includes(short) &&
-      shortLength >= CONTAINS_MIN_LENGTH &&
-      ratio >= CONTAINS_MIN_RATIO)
+      (key.includes(want) &&
+        wantLength >= CONTAINS_MIN_LENGTH &&
+        ratio >= CONTAINS_MIN_RATIO))
   ) {
     tier = TIER.approximate
   } else if (
     allowAbbreviation &&
-    ((long.includes(short) && shortLength >= ABBREV_MIN_LENGTH) ||
-      // 省略形は入力（want）のほうが短い場合だけ
-      (wantLength >= SUBSEQUENCE_MIN_LENGTH &&
-        wantLength < keyLength &&
-        isSubsequence(want, key)))
+    inputIsShorter &&
+    ((key.includes(want) && wantLength >= ABBREV_MIN_LENGTH) ||
+      (wantLength >= SUBSEQUENCE_MIN_LENGTH && isSubsequence(want, key)))
   ) {
     tier = TIER.abbreviation
   } else {
@@ -126,14 +153,12 @@ const scoreTrack = (
   }
 
   // 同じ段階の中では、曲名が近いほど高く、
-  // ライブ版を求めていないのにライブ音源が出てきたら低くする
-  let score = ratio
-  if (!LIVE_PATTERN.test(song.title) && LIVE_PATTERN.test(track.name)) {
-    score -= 1
-  }
+  // 求めていない別バージョン（ライブ・アコースティックなど）は低くする
+  const score = (tier >= TIER.equivalent ? 1 : ratio) - (isVariant ? 1 : 0)
   return {
     track,
-    approximate: tier <= TIER.approximate,
+    // 別バージョンしか見つからずにそれを選んだ場合も、確認してもらう
+    approximate: tier <= TIER.approximate || isVariant,
     tier,
     score,
     key,
@@ -154,7 +179,7 @@ const pickBest = (
   const [best] = scored
   if (!best) return null
   // 近似・略称で選ぶときは、同じ段階に曲名の違う候補があれば決めつけない。
-  // 同じ曲名の別音源（リマスター・ライブなど）は同じ曲として扱う
+  // 同じ曲名の別音源（リマスターなど）は同じ曲として扱う
   if (
     best.approximate &&
     scored.some((s) => s.tier === best.tier && s.key !== best.key)
@@ -168,21 +193,19 @@ const pickBest = (
 export const createSongMatcher = (api: SpotifyApi) => {
   const catalogs = new Map<string, Promise<SpotifyTrack[] | null>>()
 
+  // アーティストを1人に特定できないときは null。
+  // API エラーはそのまま投げる（握りつぶすと「全曲で確かめた」前提が黙って外れるため）
   const getCatalog = (artist: string) => {
-    const key = normalizeTitle(artist)
+    const key = compactTitle(artist)
     let catalog = catalogs.get(key)
     if (!catalog) {
       catalog = (async () => {
-        try {
-          const results = await api.searchArtists(artist)
-          const exact = results.items.filter(
-            (a) => compactTitle(a.name) === compactTitle(artist),
-          )
-          if (exact.length !== 1) return null
-          return await api.collectArtistsTracks([exact[0].id])
-        } catch {
-          return null
-        }
+        const results = await api.searchArtists(artist)
+        const exact = results.items.filter(
+          (a) => compactTitle(a.name) === compactTitle(artist),
+        )
+        if (exact.length !== 1) return null
+        return api.collectArtistsTracks([exact[0].id])
       })()
       catalogs.set(key, catalog)
     }
@@ -203,13 +226,10 @@ export const createSongMatcher = (api: SpotifyApi) => {
     const loose = pickBest(await api.searchTracks(`${title} ${artist}`), song)
     if (loose && !loose.approximate) return loose
 
-    // 検索で見つからないときは、そのアーティストの全曲から探す。
-    // 全曲が取れたときは、紛らわしい曲がないかも全曲で判定できるので、その結果を採用する
-    // （検索結果の上位10件だけで近似を決めると、別の候補を見落とすことがある）
+    // 近似・略称・別バージョンは、アーティストの全曲で紛らわしい曲がないか確かめてから採用する。
+    // 全曲が取れない（アーティストを1人に特定できない）ときは採用しない
     const catalog = await getCatalog(song.artist)
-    if (catalog) return pickBest(catalog, song, true)
-
-    return strict ?? loose
+    return catalog ? pickBest(catalog, song, true) : null
   }
 
   return { find }

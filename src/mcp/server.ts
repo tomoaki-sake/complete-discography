@@ -2,7 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import * as z from "zod"
 import type { SpotifyApi } from "../lib/spotify-api"
-import { createSongMatcher, type SongQuery } from "./song-matcher"
+import { normalizeTitle } from "../lib/spotify-api"
+import { compactTitle, createSongMatcher, type SongQuery } from "./song-matcher"
 
 // MCP のツール定義。通信方式（stdio / HTTP）には依存しないので、
 // HTTP で公開したくなったら別のエントリポイントからこれを使い回せる。
@@ -14,8 +15,6 @@ import { createSongMatcher, type SongQuery } from "./song-matcher"
 
 const MAX_CANDIDATES = 5
 const MAX_SONGS = 300
-
-const normalize = (s: string) => s.normalize("NFKC").trim().toLowerCase()
 
 const json = (value: unknown, isError = false): CallToolResult => ({
   content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
@@ -55,7 +54,8 @@ const resolveArtist = async (
     return { kind: "not_found", query: input.name }
 
   const exact = results.items.filter(
-    (a) => normalize(a.name) === normalize(input.name),
+    // 曲リストの照合（song-matcher）と同じ基準でアーティスト名を比べる
+    (a) => compactTitle(a.name) === compactTitle(input.name),
   )
   if (exact.length === 1) {
     return { kind: "resolved", id: exact[0].id, name: exact[0].name }
@@ -137,6 +137,20 @@ export const createMcpServer = (api: SpotifyApi) => {
       public: isPublic,
     }) => {
       try {
+        if (
+          released_from &&
+          released_to &&
+          released_from.padEnd(10, "0") > released_to.padEnd(10, "9")
+        ) {
+          return json(
+            {
+              status: "error",
+              message: "released_from が released_to より後になっています。",
+            },
+            true,
+          )
+        }
+
         const resolutions = await Promise.all(
           artists.map((a) => resolveArtist(api, a)),
         )
@@ -251,7 +265,7 @@ export const createMcpServer = (api: SpotifyApi) => {
     >()
 
     for (const [i, song] of songs.entries()) {
-      const key = `${normalize(song.title)}|${normalize(song.artist)}`
+      const key = `${normalizeTitle(song.title)}|${normalizeTitle(song.artist)}`
       let match = cache.get(key)
       if (match === undefined) {
         const found = await matcher.find(song)
@@ -363,6 +377,7 @@ export const createMcpServer = (api: SpotifyApi) => {
         "このツールで作ったプレイリスト（ユーザー自身のプレイリスト）の名前・説明・公開設定を変える、または曲を入れ替える。",
         "songs を指定すると、プレイリストの曲をすべてそのリストで置き換える（追記ではない）。曲名を直して入れ直すときは、直した曲だけでなく全曲を順番どおりに渡すこと。",
         "既存の曲を置き換える操作なので、実行前にどのプレイリストをどう変えるかユーザーに確認すること。",
+        "見つからない曲が1曲でもあると、既定では何も変更せず status: 'needs_confirmation' と not_found を返す。曲名を直して呼び直すか、見つからない曲を除いて置き換えてよいとユーザーが了承した場合だけ allow_partial: true で呼び直すこと。",
         SETLIST_NAMING,
       ].join("\n"),
       inputSchema: {
@@ -382,6 +397,12 @@ export const createMcpServer = (api: SpotifyApi) => {
         songs: songsSchema
           .optional()
           .describe("指定すると曲をすべてこのリストで置き換える（任意）"),
+        allow_partial: z
+          .boolean()
+          .default(false)
+          .describe(
+            "見つからない曲があっても、見つかった曲だけで置き換える（ユーザーが了承した場合のみ true）",
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -390,7 +411,14 @@ export const createMcpServer = (api: SpotifyApi) => {
         openWorldHint: true,
       },
     },
-    async ({ playlist, name, description, public: isPublic, songs }) => {
+    async ({
+      playlist,
+      name,
+      description,
+      public: isPublic,
+      songs,
+      allow_partial,
+    }) => {
       try {
         const playlistId = parsePlaylistId(playlist)
         if (!playlistId) {
@@ -414,7 +442,7 @@ export const createMcpServer = (api: SpotifyApi) => {
           )
         }
 
-        // 曲の照合を先に済ませ、1曲も見つからないときはプレイリストを空にしない
+        // 曲の照合を先に済ませ、何かを変える前に問題がないか確かめる
         const resolved = songs ? await resolveSongs(songs) : undefined
         if (resolved && resolved.uris.length === 0) {
           return json(
@@ -427,13 +455,39 @@ export const createMcpServer = (api: SpotifyApi) => {
             true,
           )
         }
+        // 一部の曲が見つからないまま置き換えると、もとから入っていた正しい曲が消えるので確認を挟む
+        if (resolved && resolved.notFound.length > 0 && !allow_partial) {
+          return json({
+            status: "needs_confirmation",
+            message:
+              "見つからない曲があるため、プレイリストは変更していません。曲名を直して呼び直すか、見つからない曲を除いて置き換えてよいかユーザーに確認し、了承されたら allow_partial: true で呼び直してください。",
+            ...matchReport(songs?.length ?? 0, resolved),
+          })
+        }
 
-        await api.updatePlaylistDetails(playlistId, {
-          name,
-          description,
-          isPublic,
-        })
-        if (resolved) await api.replacePlaylistTracks(playlistId, resolved.uris)
+        // 曲の入れ替え → 名前などの変更の順に行い、途中で失敗したらどこまで反映したかを返す
+        const done: string[] = []
+        try {
+          if (resolved) {
+            await api.replacePlaylistTracks(playlistId, resolved.uris)
+            done.push("曲の入れ替え")
+          }
+          await api.updatePlaylistDetails(playlistId, {
+            name,
+            description,
+            isPublic,
+          })
+        } catch (error) {
+          return json(
+            {
+              status: "partial_failure",
+              message: `更新が途中で失敗しました。${done.length > 0 ? `完了: ${done.join("・")}。` : ""}${error instanceof Error ? error.message : String(error)}`,
+              playlist_id: playlistId,
+              url: `https://open.spotify.com/playlist/${playlistId}`,
+            },
+            true,
+          )
+        }
 
         return json({
           status: "updated",
@@ -452,14 +506,26 @@ export const createMcpServer = (api: SpotifyApi) => {
   return server
 }
 
-// プレイリストの URL / URI / ID から ID を取り出す
-const parsePlaylistId = (input: string): string | null => {
+// Spotify の ID は 22 文字の英数字（base62）
+const SPOTIFY_ID = "[A-Za-z0-9]{22}"
+
+// プレイリストの URL / URI / ID から ID を取り出す。
+// 対応する形:
+// - https://open.spotify.com/playlist/<id>（?si=... 付き、/intl-ja/ 付きも可）
+// - https://open.spotify.com/user/<user>/playlist/<id>（旧形式）
+// - spotify:playlist:<id> / spotify:user:<user>:playlist:<id>
+// - <id>（22 文字の英数字）
+export const parsePlaylistId = (input: string): string | null => {
   const s = input.trim()
   const fromUrl = s.match(
-    /open\.spotify\.com\/(?:[\w-]+\/)?playlist\/([A-Za-z0-9]+)/,
+    new RegExp(
+      `^https?://open\\.spotify\\.com/(?:intl-[\\w-]+/)?(?:user/[^/]+/)?playlist/(${SPOTIFY_ID})(?:[/?#].*)?$`,
+    ),
   )
   if (fromUrl) return fromUrl[1]
-  const fromUri = s.match(/^spotify:playlist:([A-Za-z0-9]+)$/)
+  const fromUri = s.match(
+    new RegExp(`^spotify:(?:user:[^:]+:)?playlist:(${SPOTIFY_ID})$`),
+  )
   if (fromUri) return fromUri[1]
-  return /^[A-Za-z0-9]{10,}$/.test(s) ? s : null
+  return new RegExp(`^${SPOTIFY_ID}$`).test(s) ? s : null
 }

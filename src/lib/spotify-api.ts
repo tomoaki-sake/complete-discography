@@ -33,6 +33,9 @@ const toDate = (date: string, edge: "start" | "end"): string => {
   return `${y}-${m ?? "12"}-${d ?? "31"}`
 }
 
+// Spotify では発売日が分からないアルバムに "0000" が入ることがある
+const isUnknownDate = (date: string | undefined) => !date || /^0000/.test(date)
+
 // 曲名の比較用。全角半角・大文字小文字・前後の空白の違いを無視する
 export const normalizeTitle = (s: string) =>
   s.normalize("NFKC").trim().toLowerCase()
@@ -44,22 +47,36 @@ export interface CreatePlaylistOptions {
   description?: string
 }
 
+const MAX_ATTEMPTS = 4
+const MAX_RETRY_WAIT_SECONDS = 30
+
 export const createSpotifyApi = (getAccessToken: GetAccessToken) => {
   const request = async <T>(
     endpoint: string,
     method: Method = "GET",
     body?: unknown,
   ): Promise<T> => {
-    const token = await getAccessToken()
+    let res: Response
+    for (let attempt = 1; ; attempt++) {
+      const token = await getAccessToken()
+      res = await fetch(spotifyDomain + endpoint, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
 
-    const res = await fetch(spotifyDomain + endpoint, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
+      // レート制限（429）は Retry-After の秒数だけ待ってやり直す
+      if (res.status !== 429 || attempt >= MAX_ATTEMPTS) break
+      const retryAfter = Number(res.headers.get("Retry-After"))
+      const waitSeconds = Math.min(
+        Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : attempt,
+        MAX_RETRY_WAIT_SECONDS,
+      )
+      await new Promise((r) => setTimeout(r, waitSeconds * 1000))
+    }
 
     if (!res.ok) {
       const detail = await res.text()
@@ -142,11 +159,19 @@ export const createSpotifyApi = (getAccessToken: GetAccessToken) => {
         }
       }
     }
-    const albums = [...albumsById.values()].sort((a, b) =>
-      toDate(a.release_date, "start").localeCompare(
-        toDate(b.release_date, "start"),
-      ),
-    )
+    // 発売日が不明（"0000" など）のアルバムは最後に回し、
+    // 期間を指定したときは対象にしない（初出の判定にも使わない）
+    const hasRange = Boolean(range.from || range.to)
+    const albums = [...albumsById.values()]
+      .filter((a) => !hasRange || !isUnknownDate(a.release_date))
+      .sort(
+        (a, b) =>
+          Number(isUnknownDate(a.release_date)) -
+            Number(isUnknownDate(b.release_date)) ||
+          toDate(a.release_date, "start").localeCompare(
+            toDate(b.release_date, "start"),
+          ),
+      )
 
     const from = range.from ? toDate(range.from, "start") : undefined
     const to = range.to ? toDate(range.to, "end") : undefined
@@ -231,13 +256,27 @@ export const createSpotifyApi = (getAccessToken: GetAccessToken) => {
     trackUris: string[],
   ): Promise<void> => {
     const BATCH_SIZE = 100
-    // PUT は1回に100件まで。最初の100件で置き換え、残りは追加する
-    await request(`v1/playlists/${playlistId}/items`, "PUT", {
-      uris: trackUris.slice(0, BATCH_SIZE),
-    })
-    for (let i = BATCH_SIZE; i < trackUris.length; i += BATCH_SIZE) {
-      const uris = trackUris.slice(i, i + BATCH_SIZE)
-      await request(`v1/playlists/${playlistId}/items`, "POST", { uris })
+    // PUT は1回に100件まで。最初の100件で置き換え、残りは追加する。
+    // 途中で失敗したときに状態がわかるよう、何曲まで反映したかをエラーに含める
+    let applied = 0
+    try {
+      await request(`v1/playlists/${playlistId}/items`, "PUT", {
+        uris: trackUris.slice(0, BATCH_SIZE),
+      })
+      applied = Math.min(BATCH_SIZE, trackUris.length)
+      for (let i = BATCH_SIZE; i < trackUris.length; i += BATCH_SIZE) {
+        const uris = trackUris.slice(i, i + BATCH_SIZE)
+        await request(`v1/playlists/${playlistId}/items`, "POST", { uris })
+        applied += uris.length
+      }
+    } catch (error) {
+      const state =
+        applied === 0
+          ? "曲は変更されていません"
+          : `先頭から ${applied} / ${trackUris.length} 曲だけが入った状態です`
+      throw new Error(
+        `曲の入れ替えが途中で失敗しました（${state}）: ${error instanceof Error ? error.message : error}`,
+      )
     }
   }
 
