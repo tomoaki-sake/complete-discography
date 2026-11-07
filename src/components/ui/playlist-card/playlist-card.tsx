@@ -53,7 +53,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
                 rel="noopener noreferrer"
                 className="bg-green-600 text-white px-6 py-3 rounded-full
                            hover:bg-green-700 transition-colors duration-200
-                           focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2
+                           focus:outline-hidden focus:ring-2 focus:ring-green-500 focus:ring-offset-2
                            flex items-center justify-center space-x-2"
               >
                 <span>Spotifyで開く</span>
@@ -63,7 +63,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
                 type="button"
                 className={`bg-indigo-600 text-white px-6 py-3 rounded-full
                             hover:bg-indigo-700 transition-colors duration-200
-                            focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
+                            focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
                             flex items-center justify-center space-x-2
                             ${isCreating ? "opacity-50 cursor-not-allowed" : ""}`}
                 onClick={handleCreatePlaylist}

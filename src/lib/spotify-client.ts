@@ -25,8 +25,15 @@ const spotifyClient = async <T>(
       Authorization: `Bearer ${token.access_token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
   })
+
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(
+      `Spotify API ${method} ${endpoint} failed: ${res.status} ${detail}`,
+    )
+  }
 
   return res.json()
 }
@@ -46,7 +53,8 @@ export const searchArtists = async (
 ): Promise<SpotifyPage<SpotifyArtist> | null> => {
   try {
     const result = await spotifyClient<SpotifyArtistsSearchResponse>(
-      `v1/search?q=${query}&type=artist`,
+      // 2026-02 の仕様変更で search の limit 上限は 10（デフォルト 5）
+      `v1/search?q=${encodeURIComponent(query)}&type=artist&limit=10`,
     )
     return result.artists
   } catch (error) {
@@ -85,11 +93,20 @@ const getArtistAlbums = async (artistId: string): Promise<SpotifyAlbum[]> => {
 }
 
 const getAlbumTracks = async (albumId: string): Promise<SpotifyTrack[]> => {
+  const tracks: SpotifyTrack[] = []
   try {
-    const data = await spotifyClient<SpotifyPage<SpotifyTrack>>(
-      `v1/albums/${albumId}/tracks?market=${market}`,
-    )
-    return data.items
+    let offset = 0
+    const limit = 50
+    while (true) {
+      const data = await spotifyClient<SpotifyPage<SpotifyTrack>>(
+        `v1/albums/${albumId}/tracks?market=${market}&limit=${limit}&offset=${offset}`,
+      )
+      tracks.push(...data.items)
+
+      if (data.items.length < limit) break
+      offset += limit
+    }
+    return tracks
   } catch (error) {
     console.error("Error getting album tracks:", error)
     return []
@@ -117,14 +134,14 @@ export const getAllArtistTracks = async (
 }
 
 export const createAllTracksPlayList = async (
-  userId: string,
   name: string,
   trackUris: string[],
 ): Promise<SpotifyPlaylist | null> => {
   try {
     const playlistOptions = { name }
     const playlist = await spotifyClient<SpotifyPlaylist>(
-      `v1/users/${userId}/playlists`,
+      // 2026-02 の仕様変更で /users/{id}/playlists は廃止
+      "v1/me/playlists",
       "POST",
       playlistOptions,
     )
@@ -136,7 +153,8 @@ export const createAllTracksPlayList = async (
     const BATCH_SIZE = 100
     for (let i = 0; i < trackUris.length; i += BATCH_SIZE) {
       const uris = trackUris.slice(i, i + BATCH_SIZE)
-      await spotifyClient(`v1/playlists/${playlist.id}/tracks`, "POST", {
+      // 2026-02 の仕様変更で /playlists/{id}/tracks は /items に置き換え
+      await spotifyClient(`v1/playlists/${playlist.id}/items`, "POST", {
         uris,
       })
     }

@@ -1,5 +1,5 @@
-import type { SpotifyUserProfile } from "@/types/spotify"
 import { LogOut, User } from "lucide-react"
+import type { SpotifyUserProfile } from "@/types/spotify"
 
 interface UserMenuProps {
   user: SpotifyUserProfile

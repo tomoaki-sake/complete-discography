@@ -19,11 +19,21 @@ const scope = scopes.join(" ")
 const authUrl = new URL("https://accounts.spotify.com/authorize")
 const tokenUrl = new URL("https://accounts.spotify.com/api/token")
 
-export const getOrCreateAccessToken = async (): Promise<SpotifyTokens> => {
-  const token = await getOrCreate(createAccessToken, refreshAccessToken)
-  if (!token) throw new Error("Failed to get access token")
+// 同時に複数の呼び出しがあっても認可コードの交換・リフレッシュを1回にまとめる
+// （React StrictMode の effect 二重実行などで同じ code を2回使うと失敗するため）
+let pendingToken: Promise<SpotifyTokens> | null = null
 
-  return token
+export const getOrCreateAccessToken = (): Promise<SpotifyTokens> => {
+  if (!pendingToken) {
+    pendingToken = (async () => {
+      const token = await getOrCreate(createAccessToken, refreshAccessToken)
+      if (!token) throw new Error("Failed to get access token")
+      return token
+    })().finally(() => {
+      pendingToken = null
+    })
+  }
+  return pendingToken
 }
 
 const createAccessToken = async (): Promise<SpotifyTokens | undefined> => {
