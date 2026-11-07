@@ -69,6 +69,10 @@ interface SpotifyArtist extends SpotifySimplifiedArtist {
   images: SpotifyImage[]
 }
 
+interface SpotifyTracksSearchResponse {
+  tracks: SpotifyPage<SpotifyTrack>
+}
+
 interface SpotifyArtistsSearchResponse {
   artists: SpotifyPage<SpotifyArtist>
 }
@@ -130,5 +134,6 @@ export type {
   SpotifyPlaylist,
   SpotifyTokens,
   SpotifyTrack,
+  SpotifyTracksSearchResponse,
   SpotifyUserProfile,
 }
