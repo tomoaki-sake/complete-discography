@@ -8,14 +8,19 @@
     "start": "next start -H 127.0.0.1",
     "lint": "biome lint ./src",
     "format": "biome format ./src --write",
-    "fix-lint": "biome check --write ./src"
+    "fix-lint": "biome check --write ./src",
+    "mcp": "tsx src/mcp/stdio.ts",
+    "mcp:login": "tsx src/mcp/login.ts",
+    "mcp:logout": "tsx src/mcp/logout.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
     "lucide-react": "^1.69.0",
     "next": "16.4.5",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "react-hot-toast": "^2.6.1"
+    "react-hot-toast": "^2.6.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.5",
@@ -25,6 +30,7 @@
     "@types/react-dom": "^19.3.0",
     "postcss": "^8.5.32",
     "tailwindcss": "^4.3.4",
+    "tsx": "4.23.15",
     "typescript": "^5.9.3"
   },
   "packageManager": "pnpm@9.12.3+sha512.cce0f9de9c5a7c95bef944169cc5dfe8741abfb145078c0d508b868056848a87c81e626246cb60967cbd7fd29a6c062ef73ff840d96b3c86c40ac92cf4a813ee"
